@@ -181,25 +181,49 @@ export default function ApprovalWorkflow({ contentItems, currentUser, onUpdateSt
               <span>أرشيف القرارات السابقة ومراجعات المخططين ({pastItems.length})</span>
             </h3>
 
-            <div className={`p-4 rounded-xl border max-h-64 overflow-y-auto space-y-3 ${
-              darkMode ? 'bg-slate-900/10 border-slate-800/80' : 'bg-slate-50/50 border-slate-200'
+            <div className={`p-4 rounded-xl border max-h-72 overflow-y-auto space-y-3 ${
+              darkMode ? 'bg-slate-900/10 border-slate-800' : 'bg-slate-100/50 border-slate-200'
             }`}>
               {pastItems.map((item) => (
-                <div key={item.id} className="text-xs p-3 rounded-lg bg-slate-900/50 border border-slate-800/40">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-white text-[11px]">{item.title}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded border ${getStatusBadge(item.status)}`}>
+                <div 
+                  key={item.id} 
+                  onClick={() => {
+                    setSelectedItem(item);
+                    setShowRejectBox(false);
+                    setShowChangesBox(false);
+                  }}
+                  className={`text-xs p-3 rounded-xl border cursor-pointer transition-all ${
+                    selectedItem?.id === item.id 
+                      ? 'bg-blue-600/10 border-blue-500 ring-2 ring-blue-500/20' 
+                      : darkMode 
+                        ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900' 
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <span className={`font-bold text-[11px] truncate ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.title}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border whitespace-nowrap ${getStatusBadge(item.status)}`}>
                       {item.status === 'Approved' ? 'تم اعتماده وبثه' : item.status === 'Rejected' ? 'تم رفضه' : item.status}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-400 line-clamp-1">{item.contentCopy}</p>
-                  {item.approvedAt && (
-                    <p className="text-[9px] text-slate-500 mt-1">
-                      تم الاعتماد بواسطة {item.approvedBy} في {item.approvedAt}
-                    </p>
-                  )}
+                  <p className="text-[10px] text-slate-400 line-clamp-1 mb-1.5">{item.contentCopy}</p>
+                  
+                  <div className="flex items-center justify-between text-[9px] text-slate-500 border-t border-slate-100 dark:border-slate-800/60 pt-1.5 mt-1.5">
+                    {item.isOrganic ? (
+                      <span className="text-amber-500 font-semibold">📝 بوست عادي (عضوي)</span>
+                    ) : (
+                      <span className="text-emerald-500 font-semibold">💰 ممول بقيمة ${item.budget}</span>
+                    )}
+
+                    {item.approvedAt && (
+                      <span className="opacity-80">
+                        القرار بواسطة: {item.approvedBy}
+                      </span>
+                    )}
+                  </div>
+
                   {item.rejectionReason && (
-                    <p className="text-[9px] text-red-400 mt-1 font-semibold">
+                    <p className="text-[9px] text-red-500 mt-1 font-semibold border-t border-red-500/10 pt-1">
                       سبب الرفض: {item.rejectionReason}
                     </p>
                   )}
@@ -213,80 +237,114 @@ export default function ApprovalWorkflow({ contentItems, currentUser, onUpdateSt
         <div className="lg:col-span-5">
           {selectedItem ? (
             <div className={`p-5 rounded-2xl border sticky top-4 ${
-              darkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-150 shadow-md'
+              darkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-250 shadow-md'
             }`}>
-              <h3 className={`text-sm font-bold pb-3 border-b border-slate-150 dark:border-slate-800 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                تفاصيل مراجعة: {selectedItem.title}
-              </h3>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-150 dark:border-slate-800">
+                <h3 className={`text-sm font-black ${darkMode ? 'text-white' : 'text-slate-950'}`}>
+                  تفاصيل مراجعة: {selectedItem.title}
+                </h3>
+              </div>
+
+              {/* Overriding power/decision warning banner if already resolved */}
+              {pastItems.some(x => x.id === selectedItem.id) && (
+                <div className="mt-3 p-3 bg-blue-105 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-xl text-[10.5px] text-blue-900 dark:text-blue-400 font-extrabold text-right leading-relaxed">
+                  📢 قرار محفوظ سابقاً: ({selectedItem.status === 'Approved' ? 'تم اعتماده' : 'مرفوض كلياً'}).
+                  <p className="font-bold text-[9.5px] mt-0.5 opacity-90 text-slate-600 dark:text-slate-400">
+                    بصفتك المدير العام، يمكنك تعديل أو نقض القرار في أي وقت وصياغته مجدداً بالأسفل (سيتم تحديث سجل الأنشطة فوراً).
+                  </p>
+                </div>
+              )}
 
               {/* Graphic preview mockup */}
-              <div className="my-4 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 relative h-40">
+              <div className={`my-4 rounded-xl overflow-hidden border relative h-40 ${
+                darkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-100'
+              }`}>
                 <img 
                   src={selectedItem.mediaUrl} 
                   alt={selectedItem.title} 
                   className="w-full h-full object-cover opacity-60" 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent p-4 flex flex-col justify-end">
-                  <span className="bg-slate-900/80 text-[10px] text-slate-300 px-2 py-0.5 rounded-lg border border-slate-800 self-start mb-2">
+                  <span className="bg-slate-900/80 text-[10px] text-slate-300 px-2 py-0.5 rounded-lg border border-slate-800 self-start mb-2 font-black">
                     {selectedItem.type}
                   </span>
-                  <p className="text-white text-xs font-bold leading-tight">{selectedItem.title}</p>
+                  <p className="text-white text-xs font-black leading-tight">{selectedItem.title}</p>
                 </div>
               </div>
 
               {/* Description */}
               <div className="space-y-3 text-xs leading-relaxed">
                 <div>
-                  <strong className="text-slate-400 block mb-0.5 text-[10px]">النص التسويقي (Copywriting):</strong>
-                  <div className="bg-slate-950/40 p-3 rounded-lg border border-slate-800/60 text-slate-300 text-[11px]">
+                  <strong className={`block mb-1 text-[10.5px] font-black ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+                    النص التسويقي (Copywriting):
+                  </strong>
+                  <div className={`p-4 rounded-xl border font-bold text-[11px] leading-relaxed transition-all ${
+                    darkMode 
+                      ? 'bg-slate-950/60 border-slate-800/80 text-slate-205' 
+                      : 'bg-slate-50 border-slate-250 text-slate-950 shadow-inner'
+                  }`}>
                     {selectedItem.contentCopy}
                   </div>
                 </div>
 
                 {/* Sub-grid of rich parameters */}
-                <div className="grid grid-cols-2 gap-3 text-[10px] bg-slate-950/20 p-3 rounded-lg border border-slate-800/40">
+                <div className={`grid grid-cols-2 gap-3 text-[10px] p-3.5 rounded-xl border ${
+                  darkMode 
+                    ? 'bg-slate-955/40 border-slate-800 text-slate-300' 
+                    : 'bg-slate-50 border-slate-250 text-slate-900'
+                }`}>
                   <div>
-                    <span className="text-slate-500 block">الجمهور المستهدف:</span>
-                    <span className="text-slate-300 font-semibold">{selectedItem.targetAudience}</span>
+                    <span className="text-slate-500 block font-bold">الجمهور المستهدف:</span>
+                    <span className={`font-black ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>{selectedItem.targetAudience}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">العمر والجنس:</span>
-                    <span className="text-slate-300 font-semibold">{selectedItem.targetAge} | {selectedItem.targetGender}</span>
+                    <span className="text-slate-500 block font-bold">العمر والجنس:</span>
+                    <span className={`font-black ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>{selectedItem.targetAge} | {selectedItem.targetGender}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">الميزانية:</span>
-                    <span className="text-emerald-400 font-bold">${selectedItem.budget}</span>
+                    <span className="text-slate-500 block font-bold">الميزانية المقررة:</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[10.5px]">
+                      {selectedItem.isOrganic ? 'بدون ميزانية (بوست عادي)' : `$${selectedItem.budget}`}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">الإجراء والهدف:</span>
-                    <span className="text-rose-400 font-semibold truncate block">{selectedItem.cta}</span>
+                    <span className="text-slate-500 block font-bold">الإجراء والهدف (CTA):</span>
+                    <span className="text-blue-700 dark:text-blue-400 font-black truncate block">{selectedItem.cta}</span>
                   </div>
                 </div>
 
                 {/* Interactive Action Forms for GM */}
-                <div className="border-t border-slate-850 pt-4 mt-4">
+                <div className={`border-t pt-4 mt-4 ${darkMode ? 'border-slate-800' : 'border-slate-250'}`}>
                   {canApprove ? (
                     <div className="space-y-3">
                       {!showRejectBox && !showChangesBox ? (
                         <div className="flex space-x-2 space-x-reverse">
                           <button
                             onClick={() => handleApprove(selectedItem)}
-                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-2.5 px-3 font-semibold text-xs flex items-center justify-center space-x-1 space-x-reverse transition-all shadow shadow-emerald-500/10"
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3 px-3 font-black text-xs flex items-center justify-center space-x-1.5 space-x-reverse transition-all shadow-md shadow-emerald-500/10 cursor-pointer"
                           >
                             <UserCheck className="w-4 h-4" />
-                            <span>اعتماد وموافقة فورية</span>
+                            <span>اعتماد وموافقة القرار</span>
                           </button>
                           <button
                             onClick={() => { setShowRejectBox(true); setShowChangesBox(false); }}
-                            className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl py-2.5 px-3 font-semibold text-xs transition-all border border-rose-500/30"
+                            className={`rounded-xl py-3 px-3 font-black text-xs transition-all border cursor-pointer ${
+                              darkMode 
+                                ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30' 
+                                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                            }`}
                           >
                             رفض للتعديل
                           </button>
                           <button
                             onClick={() => { setShowChangesBox(true); setShowRejectBox(false); }}
-                            className="bg-slate-800 hover:bg-slate-700 text-white rounded-xl py-2.5 px-3 font-semibold text-xs transition-all border border-slate-700"
+                            className={`rounded-xl py-3 px-3 font-black text-xs transition-all border cursor-pointer ${
+                              darkMode 
+                                ? 'bg-slate-800 hover:bg-slate-705 text-white border-slate-700' 
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+                            }`}
                           >
-                            طلب تعديل
+                            طلب تغيير ومسودة
                           </button>
                         </div>
                       ) : null}
@@ -294,28 +352,34 @@ export default function ApprovalWorkflow({ contentItems, currentUser, onUpdateSt
                       {/* Reject Input Block */}
                       {showRejectBox && (
                         <form onSubmit={(e) => handleRejectSubmit(e, selectedItem)} className="space-y-2">
-                          <label className="block text-[11px] font-semibold text-rose-400">
-                            أدخل سبب الرفض لتوجيه صانع المحتوى: <span className="text-rose-500">*</span>
+                          <label className="block text-[11px] font-black text-rose-600 dark:text-rose-400">
+                            أدخل سبب الرفض لتوجيه المخططين وصانعي المحتوى: <span className="text-rose-500">*</span>
                           </label>
                           <textarea
                             required
-                            rows={2}
+                            rows={3}
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
-                            placeholder="مثال: يرجى استبدال الشعار بآخر ذو دقة عالية، وتخفيف لغة التسويق لتناسب B2B..."
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-rose-500 text-white"
+                            placeholder="مثال: يرجى كتابة عروض التكييف بشكل أوضح وتثبيت شعار TEEC المعتمد لعام 2026..."
+                            className={`w-full rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:border-rose-500 font-bold ${
+                              darkMode 
+                                ? 'bg-slate-950 border-slate-800 text-white' 
+                                : 'bg-slate-50 border-slate-300 text-slate-955'
+                            }`}
                           />
                           <div className="flex space-x-2 space-x-reverse">
                             <button
                               type="submit"
-                              className="bg-rose-600 hover:bg-rose-500 text-white rounded-xl py-1.5 px-3 font-semibold text-[10px]"
+                              className="bg-rose-600 hover:bg-rose-500 text-white rounded-xl py-2 px-4 font-black text-[10.5px] cursor-pointer"
                             >
-                              تأكيد الرفض الكلي
+                              تأكيد وفرض الرفض الكلي
                             </button>
                             <button
                               type="button"
                               onClick={() => setShowRejectBox(false)}
-                              className="bg-slate-800 text-slate-300 rounded-xl py-1.5 px-3 text-[10px]"
+                              className={`rounded-xl py-2 px-4 text-[10.5px] font-bold cursor-pointer ${
+                                darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-800'
+                              }`}
                             >
                               إلغاء
                             </button>
@@ -326,28 +390,34 @@ export default function ApprovalWorkflow({ contentItems, currentUser, onUpdateSt
                       {/* Request Changes block */}
                       {showChangesBox && (
                         <form onSubmit={(e) => handleRequestChangesSubmit(e, selectedItem)} className="space-y-2">
-                          <label className="block text-[11px] font-semibold text-slate-300">
-                            حدد التعديلات المطلوبة (سيتحول لمسودة جارية): <span className="text-rose-500">*</span>
+                          <label className="block text-[11px] font-black text-slate-700 dark:text-slate-300">
+                            حدد التعديلات المطلوبة لإعادة المسودة للمصممين: <span className="text-rose-500">*</span>
                           </label>
                           <textarea
                             required
-                            rows={2}
+                            rows={3}
                             value={requestChangesComment}
                             onChange={(e) => setRequestChangesComment(e.target.value)}
-                            placeholder="مثال: نقترح تخفيض الميزانية المعروضة إلى 3000$ وزيادة الفئات العمرية المستهدفة."
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-blue-500 text-white"
+                            placeholder="مثال: نقترح تخفيض الميزانية المعروضة إلى 1500$ لمكيفات الكونسيلد والتركيز على مكيفات جري كأولوية."
+                            className={`w-full rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:border-blue-500 font-bold ${
+                              darkMode 
+                                ? 'bg-slate-950 border-slate-800 text-white' 
+                                : 'bg-slate-50 border-slate-300 text-slate-955'
+                            }`}
                           />
                           <div className="flex space-x-2 space-x-reverse">
                             <button
                               type="submit"
-                              className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-1.5 px-3 font-semibold text-[10px]"
+                              className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-2 px-4 font-black text-[10.5px] cursor-pointer"
                             >
                               إرسال للتعديل
                             </button>
                             <button
                               type="button"
                               onClick={() => setShowChangesBox(false)}
-                              className="bg-slate-800 text-slate-300 rounded-xl py-1.5 px-3 text-[10px]"
+                              className={`rounded-xl py-2 px-4 text-[10.5px] font-bold cursor-pointer ${
+                                darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-800'
+                              }`}
                             >
                               إلغاء
                             </button>
@@ -356,8 +426,8 @@ export default function ApprovalWorkflow({ contentItems, currentUser, onUpdateSt
                       )}
                     </div>
                   ) : (
-                    <div className="bg-slate-950/20 border border-slate-850 p-3 rounded-xl text-center text-[10px] text-slate-500">
-                      * يقتصر اتخاذ القرارات على حساب المدير العام فقط.
+                    <div className="bg-slate-100 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-850 p-3.5 rounded-xl text-center text-[10px] text-slate-500 dark:text-slate-500 font-bold">
+                      * يقتصر اتخاذ القرارات وحيازة التعديل والنقض والاعتماد على حساب المدير العام فقط.
                     </div>
                   )}
                 </div>
@@ -366,11 +436,11 @@ export default function ApprovalWorkflow({ contentItems, currentUser, onUpdateSt
             </div>
           ) : (
             <div className={`p-8 rounded-2xl border text-center border-dashed ${
-              darkMode ? 'bg-slate-900/10 border-slate-800' : 'bg-slate-50 border-slate-200'
+              darkMode ? 'bg-slate-900/10 border-slate-800' : 'bg-slate-100 border-slate-300'
             }`}>
-              <ClipboardCheck className="w-12 h-12 text-slate-500 mx-auto mb-2 opacity-60" />
-              <p className={`text-xs font-semibold ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                يرجى تحديد منشور من القائمة المعلقة لمراجعة تفاصل التقييم والاعتمادات.
+              <ClipboardCheck className="w-12 h-12 text-slate-400 mx-auto mb-2 opacity-60" />
+              <p className={`text-xs font-black ${darkMode ? 'text-slate-400' : 'text-slate-800'}`}>
+                يرجى تحديد منشور من القائمة المعلقة أو الأرشيف لمراجعة تفاصيل التقييم والاعتمادات.
               </p>
             </div>
           )}

@@ -49,6 +49,7 @@ export default function ContentPlanner({ contentItems, currentUser, onAddContent
   const [cta, setCta] = useState('احجز الآن (Book Now)');
   const [notes, setNotes] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+  const [isOrganic, setIsOrganic] = useState(false); // بوست عادي بدون اعلانات ممولة
 
   // Simulating calendar navigation date
   const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 15)); // June 15, 2026
@@ -65,18 +66,19 @@ export default function ContentPlanner({ contentItems, currentUser, onAddContent
       type,
       mediaUrl: mediaUrl || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&fit=crop',
       contentCopy,
-      campaignObjective,
+      campaignObjective: isOrganic ? 'ترويج طبيعي وعضوي غير ممول' : campaignObjective,
       marketingGoal,
       targetAudience,
       targetAge,
       targetGender,
       targetLocation,
       interests,
-      budget,
+      budget: isOrganic ? 0 : budget,
       expectedResults,
       landingPageUrl: landingPageUrl || 'https://teec-eg.com',
       cta,
       notes,
+      isOrganic,
       status: 'Submitted' // Defaults to Submitted workflow on creation
     });
 
@@ -87,6 +89,7 @@ export default function ContentPlanner({ contentItems, currentUser, onAddContent
     setContentCopy('');
     setMarketingGoal('');
     setTargetAudience('');
+    setIsOrganic(false);
     setActiveTab('scheduler');
     
     setTimeout(() => {
@@ -358,10 +361,21 @@ export default function ContentPlanner({ contentItems, currentUser, onAddContent
                         {getPostTypeIcon(item.type)}
                       </div>
                       <div className="min-w-0">
-                        <span className={`inline-block text-[9px] px-2 py-0.5 rounded border ${getStatusBadge(item.status)}`}>
-                          {getStatusArabic(item.status)}
-                        </span>
-                        <h4 className={`text-xs font-bold leading-tight mt-1 truncate ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                        <div className="flex items-center space-x-1.5 space-x-reverse flex-wrap gap-y-1">
+                          <span className={`inline-block text-[9px] px-2 py-0.5 rounded border ${getStatusBadge(item.status)}`}>
+                            {getStatusArabic(item.status)}
+                          </span>
+                          {item.isOrganic ? (
+                            <span className="inline-block text-[9px] px-2 py-0.5 rounded border bg-amber-500/10 text-amber-500 border-amber-505/20">
+                              بوست عادي (عضوي) 📝
+                            </span>
+                          ) : (
+                            <span className="inline-block text-[9px] px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                              منشور ترويجي ممول 💰
+                            </span>
+                          )}
+                        </div>
+                        <h4 className={`text-xs font-bold leading-tight mt-1.5 truncate ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>
                           {item.title}
                         </h4>
                         <p className="text-[9px] text-slate-400 mt-0.5">
@@ -389,7 +403,9 @@ export default function ContentPlanner({ contentItems, currentUser, onAddContent
                     </div>
                     <div>
                       <span className="block text-[8px] uppercase text-slate-500 font-bold">الميزانية المقدرة:</span>
-                      <span className="font-extrabold text-blue-400">${item.budget}</span>
+                      <span className="font-extrabold text-blue-400">
+                        {item.isOrganic ? 'بدون ميزانية (عضوي)' : `$${item.budget}`}
+                      </span>
                     </div>
                     <div>
                       <span className="block text-[8px] uppercase text-slate-500 font-bold">المنصة والإجراء (CTA):</span>
@@ -560,14 +576,43 @@ export default function ContentPlanner({ contentItems, currentUser, onAddContent
                 />
               </div>
 
-              {/* Field 11: Budget */}
+              {/* Field 11: Campaign category */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">الميزانية التقديرية المقررة ($)</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">تصنيف وترويج المنشور</label>
+                <select
+                  value={isOrganic ? 'organic' : 'sponsored'}
+                  onChange={(e) => {
+                    const val = e.target.value === 'organic';
+                    setIsOrganic(val);
+                    if (val) {
+                      setBudget(0);
+                    } else {
+                      setBudget(1500);
+                    }
+                  }}
+                  className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
+                >
+                  <option value="sponsored">منشور إعلاني ترويجي ممول 💰</option>
+                  <option value="organic">بوست عادي (محتوى عضوي غير ممول) 📝</option>
+                </select>
+              </div>
+
+              {/* Field 12: Budget */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  الميزانية التقديرية المقررة ($) {isOrganic && <span className="text-amber-500">(غير نشط للبوست العادي)</span>}
+                </label>
                 <input
                   type="number"
-                  value={budget}
+                  disabled={isOrganic}
+                  value={isOrganic ? 0 : budget}
                   onChange={(e) => setBudget(parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-blue-500 text-white"
+                  className={`w-full border rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-blue-500 ${
+                    isOrganic 
+                      ? 'bg-slate-200 dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-800 cursor-not-allowed' 
+                      : 'bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white'
+                  }`}
+                  placeholder={isOrganic ? '0' : 'مثال: 1500'}
                 />
               </div>
 

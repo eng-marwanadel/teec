@@ -13,6 +13,13 @@ export interface User {
   name: string;
   role: UserRole;
   avatar: string;
+  permissions?: {
+    canApprove?: boolean;
+    canEditBudget?: boolean;
+    canSyncSheets?: boolean;
+    canExportReports?: boolean;
+    canViewLogs?: boolean;
+  };
 }
 
 export interface LoginHistory {
@@ -64,6 +71,7 @@ export interface ContentItem {
   cta: string;
   notes: string;
   status: ContentStatus;
+  isOrganic?: boolean; // بوست عادي (غير ممول)
   submittedBy: string;
   submittedAt: string;
   approvedBy?: string;
@@ -75,6 +83,16 @@ export interface ContentItem {
     changedAt: string;
     comment: string;
   }[];
+}
+
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverName: string;
+  content: string;
+  timestamp: string;
 }
 
 export interface CampaignAd {

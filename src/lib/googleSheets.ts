@@ -142,6 +142,100 @@ export const createTEECSpreadsheet = async (
   return { spreadsheetId, spreadsheetUrl };
 };
 
+interface SheetProperties {
+  sheetId: number;
+  title: string;
+}
+
+interface SpreadsheetMetadata {
+  sheets: Array<{
+    properties: SheetProperties;
+  }>;
+}
+
+/**
+ * Ensures that all required sheets exist in the spreadsheet; creates any missing ones dynamically.
+ * Returns the final sheet properties (including sheetIds) mapped by sheet title.
+ */
+export const ensureTeeCSheetsExist = async (
+  accessToken: string,
+  spreadsheetId: string
+): Promise<SheetProperties[]> => {
+  const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
+  
+  const response = await fetch(getUrl, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    // Special handlings for common error situations
+    if (response.status === 403) {
+      throw new Error('صلاحيات حساب Google غير كافية للوصول لهذا الجدول. يرجى التأكد من أن حسابك يمتلك صلاحية التعديل (Editor) أو أن الملف ليس للقراءة فقط.');
+    } else if (response.status === 404) {
+      throw new Error('لم يتم العثور على ملف جدول البيانات هذا في Google Drive. يرجى التحقق من المعرّف (ID) المدخل.');
+    }
+    throw new Error(`تعذر جلب تفاصيل الجدول من Google: ${errText}`);
+  }
+
+  const metadata: SpreadsheetMetadata = await response.json();
+  const existingSheets = metadata.sheets.map((s: any) => s.properties);
+  const existingTitles = existingSheets.map((s: any) => s.title);
+
+  const requiredSheets = [
+    { title: 'منشورات_المحتوى', rowCount: 100, columnCount: 15 },
+    { title: 'حملات_المبيعات', rowCount: 100, columnCount: 14 },
+    { title: 'أرشيف_الموافقات', rowCount: 100, columnCount: 5 },
+    { title: 'سجل_الأنشطة_الآمن', rowCount: 200, columnCount: 5 }
+  ];
+
+  const missing = requiredSheets.filter(req => !existingTitles.includes(req.title));
+
+  if (missing.length > 0) {
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+    const requests = missing.map(m => ({
+      addSheet: {
+        properties: {
+          title: m.title,
+          gridProperties: {
+            rowCount: m.rowCount,
+            columnCount: m.columnCount
+          }
+        }
+      }
+    }));
+
+    const updateRes = await fetch(updateUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ requests })
+    });
+
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      throw new Error(`فشل إنشاء الجداول الفرعية المطلوبة [${missing.map(m => m.title).join(', ')}] تلقائياً: ${errText}`);
+    }
+
+    // Refresh and fetch the updated spreadsheet metadata to capture the official assigned sheetId numbers
+    const finalResponse = await fetch(getUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    if (finalResponse.ok) {
+      const finalMetadata: SpreadsheetMetadata = await finalResponse.json();
+      return finalMetadata.sheets.map((s: any) => s.properties);
+    }
+  }
+
+  return existingSheets;
+};
+
 /**
  * Synchronizes all state to Google Sheets
  */
@@ -153,6 +247,9 @@ export const syncAllDataToSpreadsheet = async (
   budget: BudgetControl,
   logs: ActivityLog[]
 ): Promise<boolean> => {
+  // 0. Ensure the required sub-sheets exist dynamically and get their properties
+  const sheetsMeta = await ensureTeeCSheetsExist(accessToken, spreadsheetId);
+
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`;
 
   // 1. Content sheet rows
@@ -272,12 +369,12 @@ export const syncAllDataToSpreadsheet = async (
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Failed to batch sync values: ${errText}`);
+    throw new Error(`فشل تحديث خلايا البيانات: ${errText}`);
   }
 
-  // Also style the sheets with some beautiful background colors for the headers
+  // Also style the sheets with some beautiful background colors for the headers using the real, official sheetIds
   try {
-    await styleSheetHeaders(accessToken, spreadsheetId, sheetDataFromBatch(spreadsheetId));
+    await styleSheetHeaders(accessToken, spreadsheetId, sheetsMeta);
   } catch (e) {
     console.error('Logging non-blocking style headers issue:', e);
   }
@@ -285,48 +382,52 @@ export const syncAllDataToSpreadsheet = async (
   return true;
 };
 
-// Helper to style spreadsheet headers nicely in blue/green and grey
-const styleSheetHeaders = async (accessToken: string, spreadsheetId: string, sheetIds: number[]) => {
+// Helper to style spreadsheet headers nicely in blue/green and grey using actual sheet metadata
+const styleSheetHeaders = async (accessToken: string, spreadsheetId: string, sheetsMeta: SheetProperties[]) => {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
   
   // Sheet indices mapped to colors matching the application design: [R, G, B]
-  const colors = [
-    { r: 0.11, g: 0.46, b: 0.92 }, // Content (Blue)
-    { r: 0.85, g: 0.35, b: 0.05 }, // Campaigns (Orange)
-    { r: 0.01, g: 0.65, b: 0.44 }, // Approvals (Green)
-    { r: 0.35, g: 0.43, b: 0.53 }  // Logs (Grey)
-  ];
+  const colorMap: Record<string, { r: number; g: number; b: number }> = {
+    'منشورات_المحتوى': { r: 0.11, g: 0.46, b: 0.92 }, // Content (Blue)
+    'حملات_المبيعات': { r: 0.85, g: 0.35, b: 0.05 }, // Campaigns (Orange)
+    'أرشيف_الموافقات': { r: 0.01, g: 0.65, b: 0.44 }, // Approvals (Green)
+    'سجل_الأنشطة_الآمن': { r: 0.35, g: 0.43, b: 0.53 }  // Logs (Grey)
+  };
 
-  const requests = sheetIds.map((sheetId, idx) => {
-    const color = colors[idx] || colors[0];
-    return {
-      repeatCell: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: 0,
-          endRowIndex: 1,
-          startColumnIndex: 0,
-          endColumnIndex: 15
-        },
-        cell: {
-          userEnteredFormat: {
-            backgroundColor: {
-              red: color.r,
-              green: color.g,
-              blue: color.b
-            },
-            textFormat: {
-              foregroundColor: { red: 1.0, green: 1.0, blue: 1.0 },
-              bold: true,
-              fontSize: 10
-            },
-            horizontalAlignment: 'RIGHT'
-          }
-        },
-        fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
-      }
-    };
-  });
+  const requests = sheetsMeta
+    .filter(sheet => colorMap[sheet.title] !== undefined)
+    .map(sheet => {
+      const color = colorMap[sheet.title];
+      return {
+        repeatCell: {
+          range: {
+            sheetId: sheet.sheetId,
+            startRowIndex: 0,
+            endRowIndex: 1,
+            startColumnIndex: 0,
+            endColumnIndex: 15
+          },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: {
+                red: color.r,
+                green: color.g,
+                blue: color.b
+              },
+              textFormat: {
+                foregroundColor: { red: 1.0, green: 1.0, blue: 1.0 },
+                bold: true,
+                fontSize: 10
+              },
+              horizontalAlignment: 'RIGHT'
+            }
+          },
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+        }
+      };
+    });
+
+  if (requests.length === 0) return;
 
   await fetch(url, {
     method: 'POST',
@@ -336,10 +437,4 @@ const styleSheetHeaders = async (accessToken: string, spreadsheetId: string, she
     },
     body: JSON.stringify({ requests })
   });
-};
-
-// Fallback lookup of sheet ids or metadata
-const sheetDataFromBatch = (spreadsheetId: string): number[] => {
-  // Creating spreadsheet usually results in 0, 1, 2, 3 as default Sheet IDs for sequentially added sheets in order
-  return [0, 1, 2, 3];
 };

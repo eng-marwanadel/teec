@@ -36,15 +36,158 @@ import ActivityLogs from './components/ActivityLogs';
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [selectedTab, setSelectedTab] = useState('dashboard');
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false); // Default to Light Mode as per user request
 
   // Core interactive states
+  const [usersList, setUsersList] = useState<User[]>(SYSTEM_USERS);
   const [contentItems, setContentItems] = useState<ContentItem[]>(INITIAL_CONTENT_ITEMS);
   const [campaigns, setCampaigns] = useState<CampaignData[]>(INITIAL_CAMPAIGNS);
   const [budgetControls, setBudgetControls] = useState<BudgetControl>(INITIAL_BUDGET_CONTROLS);
   const [teamStats, setTeamStats] = useState<TeamMemberStats[]>(INITIAL_TEAM_STATS);
   const [loginHistory, setLoginHistory] = useState<LoginHistory[]>(INITIAL_LOGIN_HISTORY);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(INITIAL_ACTIVITY_LOGS);
+
+  // Currency selection state
+  const [currencySettings, setCurrencySettings] = useState({
+    code: 'EGP',
+    symbol: 'ج.م',
+    rate: 50.0 // Egyptian Pound is the default display preference of the user (1 USD = 50 EGP approximately)
+  });
+
+  const handleCurrencyChange = (code: string) => {
+    let symbol = 'ج.م';
+    let rate = 50.0;
+    if (code === 'USD') {
+      symbol = '$';
+      rate = 1.0;
+    } else if (code === 'SAR') {
+      symbol = 'ر.س';
+      rate = 3.75;
+    } else if (code === 'AED') {
+      symbol = 'د.إ';
+      rate = 3.67;
+    }
+    setCurrencySettings({ code, symbol, rate });
+
+    // Track in logs
+    const logger: ActivityLog = {
+      id: `act-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      username: currentUser?.username || 'system',
+      role: currentUser?.role || UserRole.VIEWER,
+      action: 'تغيير العملة النشطة للتطبيق',
+      details: `تم تبديل العملة العامة لـ: ${code} (معامل ضرب حركي: ${rate})`
+    };
+    setActivityLogs(prev => [logger, ...prev]);
+  };
+
+  // dynamic GM handlers
+  const handleAddUser = (name: string, username: string, role: UserRole, customTitle: string, avatarUrl: string) => {
+    const newUser: User = {
+      id: `u-${Date.now()}`,
+      name,
+      username,
+      role,
+      avatar: avatarUrl,
+      permissions: {
+        canApprove: role === UserRole.GENERAL_MANAGER || role === UserRole.MARKETING_MANAGER,
+        canEditBudget: role === UserRole.GENERAL_MANAGER || role === UserRole.MEDIA_BUYER,
+        canSyncSheets: role === UserRole.GENERAL_MANAGER || role === UserRole.MARKETING_MANAGER,
+        canExportReports: true,
+        canViewLogs: role === UserRole.GENERAL_MANAGER,
+      }
+    };
+    setUsersList(prev => [...prev, newUser]);
+
+    const newStats: TeamMemberStats = {
+      id: newUser.id,
+      name: newUser.name,
+      role: customTitle,
+      avatar: newUser.avatar,
+      approvedCount: 0,
+      submittedCount: 0,
+      publishedCount: 0,
+      activeCampaigns: 0,
+      rejectedCount: 0,
+    };
+    setTeamStats(prev => [...prev, newStats]);
+
+    const logger: ActivityLog = {
+      id: `act-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      username: currentUser?.username || 'manager_teec',
+      role: UserRole.GENERAL_MANAGER,
+      action: 'إضافة موظف/إداري جديد',
+      details: `تم تسجيل الموظف "${name}" بالدور "${customTitle}"`
+    };
+    setActivityLogs(prev => [logger, ...prev]);
+  };
+
+  const handleUpdateUser = (id: string, updatedFields: Partial<User & { customTitle?: string }>) => {
+    setUsersList(prev => prev.map(u => {
+      if (u.id === id) {
+        return {
+          ...u,
+          name: updatedFields.name ?? u.name,
+          username: updatedFields.username ?? u.username,
+          role: updatedFields.role ?? u.role,
+          avatar: updatedFields.avatar ?? u.avatar,
+          permissions: updatedFields.permissions ?? u.permissions
+        };
+      }
+      return u;
+    }));
+
+    setTeamStats(prev => prev.map(t => {
+      if (t.id === id) {
+        return {
+          ...t,
+          name: updatedFields.name ?? t.name,
+          role: updatedFields.customTitle ?? t.role,
+          avatar: updatedFields.avatar ?? t.avatar
+        };
+      }
+      return t;
+    }));
+
+    if (currentUser?.id === id) {
+      setCurrentUser(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          name: updatedFields.name ?? prev.name,
+          avatar: updatedFields.avatar ?? prev.avatar,
+          role: updatedFields.role ?? prev.role,
+          permissions: updatedFields.permissions ?? prev.permissions
+        };
+      });
+    }
+
+    const logger: ActivityLog = {
+      id: `act-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      username: currentUser?.username || 'manager_teec',
+      role: UserRole.GENERAL_MANAGER,
+      action: 'تعديل الصلاحيات الفردية للموظف',
+      details: `تمت مزامنة صلاحيات الموظف ذو المعرف البنيوي ${updatedFields.name || id}`
+    };
+    setActivityLogs(prev => [logger, ...prev]);
+  };
+
+  const handleDeleteUser = (id: string) => {
+    setUsersList(prev => prev.filter(u => u.id !== id));
+    setTeamStats(prev => prev.filter(t => t.id !== id));
+
+    const logger: ActivityLog = {
+      id: `act-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      username: currentUser?.username || 'manager_teec',
+      role: UserRole.GENERAL_MANAGER,
+      action: 'حذف موظف ومصادرة صلاحياته الكلية',
+      details: `تم مسح ملف الموظف ذو المعرف البنيوي ${id} نهائياً`
+    };
+    setActivityLogs(prev => [logger, ...prev]);
+  };
 
   // Page stats
   const pageStats = INITIAL_PAGE_ANALYTICS;
@@ -222,6 +365,7 @@ export default function App() {
       <LoginScreen 
         onLoginSuccess={handleLoginSuccess} 
         onAddLoginHistory={handleAddLoginHistory} 
+        usersList={usersList}
       />
     );
   }
@@ -234,6 +378,7 @@ export default function App() {
           <Dashboard 
             campaigns={campaigns} 
             darkMode={darkMode} 
+            currencySettings={currencySettings}
             onRefresh={() => {
               // Simulate small stats adjustments on refresh
               setCampaigns(prev => prev.map(c => ({
@@ -288,6 +433,10 @@ export default function App() {
             teamStats={teamStats} 
             currentUser={currentUser} 
             darkMode={darkMode} 
+            usersList={usersList}
+            onAddUser={handleAddUser}
+            onUpdateUser={handleUpdateUser}
+            onDeleteUser={handleDeleteUser}
           />
         );
       case 'sheets':
@@ -335,6 +484,8 @@ export default function App() {
         pendingApprovalsCount={pendingApprovalsCount}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        currencySettings={currencySettings}
+        onCurrencyChange={handleCurrencyChange}
       />
 
       {/* Main Content Area */}
