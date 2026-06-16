@@ -1,0 +1,6 @@
+{
+  "name": "TEEC Marketing Control Room",
+  "description": "Marketing management control room for TEEC with Google Sheets and Google Drive live synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
